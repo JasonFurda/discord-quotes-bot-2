@@ -33,13 +33,22 @@ async function postWeeklyQuote() {
             process.exit(1);
         }
         
-        // Fetch messages from the quotes channel
-        const messages = await quotesChannel.messages.fetch({ limit: 100 });
-        
+        // Fetch ALL messages from the quotes channel (paginated)
+        const allMessages = new Map();
+        let lastId = undefined;
+        let hasMore = true;
+        while (hasMore) {
+            const options = { limit: 100 };
+            if (lastId) options.before = lastId;
+            const batch = await quotesChannel.messages.fetch(options);
+            if (batch.size === 0) break;
+            batch.forEach((msg) => allMessages.set(msg.id, msg));
+            lastId = batch.last().id;
+            hasMore = batch.size === 100;
+        }
         // Filter out bot messages and empty messages
-        const validMessages = messages
-            .filter(msg => !msg.author.bot && msg.content.trim().length > 0)
-            .map(msg => msg);
+        const validMessages = Array.from(allMessages.values())
+            .filter(msg => !msg.author.bot && msg.content.trim().length > 0);
         
         if (validMessages.length === 0) {
             console.log('No valid quotes found in the quotes channel');
